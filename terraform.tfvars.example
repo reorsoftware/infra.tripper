@@ -1,0 +1,19 @@
+subscription_id         = "6ab40698-3a04-40ef-aa51-2216ec149195"
+tenant_id               = "e9c31ad7-4805-4f03-82eb-4c2b1fee07b8"
+location                = "uksouth"
+acr_subscription_id     = "b787b673-6b27-48a9-93fd-c38f53934a10"
+acr_name                = "crreoridentityprod"
+acr_resource_group_name = "rg-identity-01"
+
+# Globally unique server name: psql-tripper-uks-6ab40698
+unique_suffix           = "6ab40698"
+postgres_admin_username = "tripperadmin"
+postgres_sku_name       = "B_Standard_B1ms"
+postgres_storage_mb     = 32768
+
+# Replace locally; both values must use the same password. Never commit real secrets.
+postgres_admin_password    = "REPLACE_WITH_STRONG_PASSWORD"
+database_connection_string = "Host=psql-tripper-uks-6ab40698.postgres.database.azure.com;Port=5432;Database=tripper;Username=tripperadmin;Password=REPLACE_WITH_STRONG_PASSWORD;SSL Mode=Require"
+
+# SWA is global hosting with a separate supported control-plane region.
+static_web_app_location = "eastus2"

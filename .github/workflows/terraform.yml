@@ -1,0 +1,92 @@
+name: Terraform infrastructure
+
+on:
+  pull_request:
+    paths:
+      - '**'
+  push:
+    branches: [main]
+    paths:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply infrastructure after environment approval (main only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+
+jobs:
+  check:
+    name: Format, validate and offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -lockfile=readonly
+      - run: terraform validate
+      - run: terraform test
+      - run: terraform -chdir=bootstrap init -backend=false -lockfile=readonly
+      - run: terraform -chdir=bootstrap validate
+
+  infrastructure:
+    name: Plan or approved apply
+    needs: check
+    # Fork PRs receive offline checks only. Never use pull_request_target.
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.apply && 'terraform-apply' || 'terraform-plan' }}
+    concurrency:
+      group: tripper-terraform-state
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: 'true'
+      ARM_USE_AZUREAD: 'true'
+      ARM_USE_CLI: 'false'
+      TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+      TF_VAR_acr_subscription_id: ${{ vars.ACR_SUBSCRIPTION_ID }}
+      TF_VAR_acr_name: ${{ vars.ACR_NAME }}
+      TF_VAR_acr_resource_group_name: ${{ vars.ACR_RESOURCE_GROUP_NAME }}
+      TF_VAR_postgres_admin_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      TF_VAR_database_connection_string: ${{ secrets.DATABASE_CONNECTION_STRING }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+      - name: Authenticate to Azure using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Initialize remote state
+        run: terraform init -backend-config=backend.hcl.example -lockfile=readonly
+      - run: terraform validate
+      - name: Plan
+        run: terraform plan -out=tripper.tfplan -lock-timeout=5m
+      - name: Apply (protected environment approval required)
+        if: github.event_name == 'workflow_dispatch' && inputs.apply
+        run: terraform apply -input=false -lock-timeout=5m tripper.tfplan

@@ -1,0 +1,7 @@
+resource_group_name  = "rg-tripper-tfstate-uks"
+storage_account_name = "sttripperstate6ab40698"
+container_name       = "tfstate"
+key                  = "tripper.tfstate"
+subscription_id      = "6ab40698-3a04-40ef-aa51-2216ec149195"
+tenant_id            = "e9c31ad7-4805-4f03-82eb-4c2b1fee07b8"
+use_azuread_auth     = true
